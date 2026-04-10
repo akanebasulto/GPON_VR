@@ -8,8 +8,8 @@ public class MouseLook : MonoBehaviour
     public float sensitivityY = 3.0f;
 
     [Header("Referencias")]
-    public Transform playerBody;
-    public Transform cameraTransform;
+    public Transform playerBody;      // XR Origin
+    public Transform cameraOffset;    // Camera Offset 
 
     [Header("Límite vertical")]
     public float minVertical = -80f;
@@ -25,15 +25,18 @@ public class MouseLook : MonoBehaviour
         if (playerBody == null)
             playerBody = transform.root;
 
-        if (cameraTransform == null)
-            cameraTransform = Camera.main.transform;
+        // Busca Camera Offset automáticamente si no se asigna
+        if (cameraOffset == null)
+        {
+            GameObject co = GameObject.Find("Camera Offset");
+            if (co != null) cameraOffset = co.transform;
+        }
     }
 
     void Update()
     {
         if (Cursor.lockState != CursorLockMode.Locked) return;
 
-        // ✅ New Input System — reemplaza Input.GetAxis
         Vector2 mouseDelta = Mouse.current.delta.ReadValue();
 
         float mouseX = mouseDelta.x * sensitivityX * Time.deltaTime;
@@ -42,9 +45,9 @@ public class MouseLook : MonoBehaviour
         // Rotación horizontal → XR Origin
         playerBody.Rotate(Vector3.up * mouseX);
 
-        // Rotación vertical → solo la cámara
+        // Rotación vertical → Camera Offset (no Main Camera)
         rotationX -= mouseY;
         rotationX = Mathf.Clamp(rotationX, minVertical, maxVertical);
-        cameraTransform.localRotation = Quaternion.Euler(rotationX, 0f, 0f);
+        cameraOffset.localRotation = Quaternion.Euler(rotationX, 0f, 0f);
     }
 }
