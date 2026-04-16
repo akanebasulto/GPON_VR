@@ -2,8 +2,8 @@ using UnityEngine;
 
 public class ForceCameraHeightFixed : MonoBehaviour
 {
-    [Header("Altura de los ojos (0.1 = persona de pie)")]
-    public float eyeHeight = 0.1f;
+    [Header("Altura de los ojos (1.1 = persona de pie)")]
+    public float eyeHeight = 1.1f;
 
     void LateUpdate()
     {
