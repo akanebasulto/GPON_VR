@@ -7,6 +7,7 @@ TagManager:
   - Interactable
   - FiberPort
   - LED_OLT
+  - LED_ONT
   layers:
   - Default
   - TransparentFX
