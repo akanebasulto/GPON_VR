@@ -1,0 +1,17 @@
+fileFormatVersion: 2
+guid: f5890cabe94cf194eb0c676330849a54
+MonoImporter:
+  externalObjects: {}
+  serializedVersion: 2
+  defaultReferences:
+  - panelOLT: {instanceID: 0}
+  - textoPanel: {instanceID: 0}
+  - matLedVerde: {fileID: 2100000, guid: e18a7630678b57a409b1a5d367d14338, type: 2}
+  - matLedNaranja: {fileID: 2100000, guid: 06cfae231eb7e784c903c7d7dc02363c, type: 2}
+  - matLedRojo: {fileID: 2100000, guid: 5f2155791876fbb46b7a6449fe713c73, type: 2}
+  - matLedGris: {fileID: 2100000, guid: 98dbe387c4e60f9478d643414171c182, type: 2}
+  executionOrder: 0
+  icon: {instanceID: 0}
+  userData: 
+  assetBundleName: 
+  assetBundleVariant: 
