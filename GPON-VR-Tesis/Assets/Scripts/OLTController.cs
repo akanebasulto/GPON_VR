@@ -185,9 +185,9 @@ public class OLTController : MonoBehaviour
 
         // Estado legible de la red
         string estadoRed;
-        if (puertosActivos == 4) estadoRed = "✓ TODOS LOS CLIENTES ACTIVOS";
-        else if (puertosActivos > 0) estadoRed = "⚠ CLIENTES 3 y 4 SIN SEÑAL";
-        else estadoRed = "✗ RED INOPERATIVA";
+        if (puertosActivos == 4) estadoRed = "[OK] TODOS LOS CLIENTES ACTIVOS";
+        else if (puertosActivos > 0) estadoRed = "[!!] CLIENTES 3 y 4 SIN SEÑAL";
+        else estadoRed = "[--] RED INOPERATIVA";
 
         // El script construye este texto y lo mete en textoPanel
         textoPanel.text =
