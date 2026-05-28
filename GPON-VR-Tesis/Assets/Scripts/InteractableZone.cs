@@ -29,4 +29,5 @@ public class InteractableZone : MonoBehaviour
         // Si en el futuro el ONT necesita agarrarse, se añade aquí
         if (controlNAP != null) { controlNAP.AbrirCerrar(); return; }
     }
+
 }

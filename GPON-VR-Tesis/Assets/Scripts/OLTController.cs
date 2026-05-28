@@ -179,13 +179,13 @@ public class OLTController : MonoBehaviour
         // Calcula cuántos puertos están activos
         // según la potencia configurada
         int puertosActivos;
-        if (potenciaActual >= 0f) puertosActivos = 4;
+        if (potenciaActual >= 0f) puertosActivos = 1;
         else if (potenciaActual >= -2f) puertosActivos = 2;
         else puertosActivos = 0;
 
         // Estado legible de la red
         string estadoRed;
-        if (puertosActivos == 4) estadoRed = "[OK] TODOS LOS CLIENTES ACTIVOS";
+        if (puertosActivos == 1) estadoRed = "[OK] TODOS LOS CLIENTES ACTIVOS";
         else if (puertosActivos > 0) estadoRed = "[!!] CLIENTES 3 y 4 SIN SEÑAL";
         else estadoRed = "[--] RED INOPERATIVA";
 

@@ -1523,11 +1523,8 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: Assembly-CSharp::ODF_Controller
   panelODF: {fileID: 0}
-  textoPotenciaEntrada: {fileID: 0}
-  textoPotenciaSalida: {fileID: 0}
-  textoFibrasActivas: {fileID: 0}
-  oltController: {fileID: 0}
-  sliderPotenciaOLT: {fileID: 0}
+  textoPanel: {fileID: 0}
+  controladorOLT: {fileID: 0}
 --- !u!114 &3507231817856250533
 MonoBehaviour:
   m_ObjectHideFlags: 0

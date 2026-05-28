@@ -1,26 +1,26 @@
-using UnityEngine;
+﻿using UnityEngine;
 using TMPro;
 
-// Este script va en el GameObject ODF_Panel
+// Va en: ODF_Chasis (Zona 1 — rack)
+// Panel de solo lectura.
+// Se actualiza automaticamente cuando el OLT cambia potencia.
+
 public class ODFController : MonoBehaviour
 {
-    [Header("Panel de UI")]
+    [Header("Panel educativo")]
     public GameObject panelODF;
+    public TMP_Text textoPanel;
 
-    [Header("Textos del panel")]
-    public TMP_Text textoPotenciaEntrada;   // Recibe del OLT
-    public TMP_Text textoPotenciaSalida;    // Calcula y muestra
-    public TMP_Text textoFibrasActivas;
+    [Header("Referencia al OLT")]
+    public OLTController controladorOLT;
 
-    [Header("Referencia al OLT (para leer potencia)")]
-    public OLTController oltController;     // Se arrastra en el Inspector
+    // ── Constantes tecnicas reales ──
+    private const float PERDIDA_ADAPTADOR = 0.30f; // dB por adaptador SC/APC
+    private const float PERDIDA_TOTAL_ODF = 0.60f; // entrada + salida
+    private const float DISTANCIA_CIERRE = 4.0f;
 
-    [Header("Slider del OLT (para leer el valor)")]
-    public UnityEngine.UI.Slider sliderPotenciaOLT;
-
-    // P�rdida fija del ODF � valor est�ndar real
-    private const float PERDIDA_ODF = 0.6f; // dB
-
+    // ── Estado interno ──
+    private float potenciaDesdeOLT = 2.0f;
     private bool panelAbierto = false;
 
     void Start()
@@ -28,34 +28,100 @@ public class ODFController : MonoBehaviour
         if (panelODF != null)
             panelODF.SetActive(false);
 
-        // Se suscribe al evento del OLT
-        // Cuando el OLT cambie par�metros, este script se entera
-        if (oltController != null)
-            oltController.OnParameterChanged.AddListener(ActualizarDatos);
+        // Suscripcion al evento del OLT
+        if (controladorOLT != null)
+            controladorOLT.OnParameterChanged.AddListener(
+                OnPotenciaOLTCambiada);
     }
+
+    void OnDestroy()
+    {
+        if (controladorOLT != null)
+            controladorOLT.OnParameterChanged.RemoveListener(
+                OnPotenciaOLTCambiada);
+    }
+
+    void Update()
+    {
+        if (!panelAbierto) return;
+        if (Camera.main == null) return;
+
+        float dist = Vector3.Distance(
+            transform.position, Camera.main.transform.position);
+        if (dist > DISTANCIA_CIERRE) CerrarPanel();
+    }
+
+    // Llamado automaticamente cuando el OLT cambia su potencia
+    void OnPotenciaOLTCambiada(float nuevaPotencia)
+    {
+        potenciaDesdeOLT = nuevaPotencia;
+        if (panelAbierto) RefrescarPanel();
+    }
+
+    // ── Métodos de panel ──
 
     public void TogglePanel()
     {
-        panelAbierto = !panelAbierto;
-        panelODF.SetActive(panelAbierto);
-
-        // Al abrir el panel, actualiza los datos inmediatamente
-        if (panelAbierto && sliderPotenciaOLT != null)
-            ActualizarDatos(sliderPotenciaOLT.value);
+        if (panelAbierto) CerrarPanel();
+        else AbrirPanel();
     }
 
-    // Se llama autom�ticamente cuando el OLT dispara su evento
-    // potenciaOLT es el valor actual del slider de potencia
-    void ActualizarDatos(float potenciaOLT)
+    public void AbrirPanel()
     {
-        float potenciaSalida = potenciaOLT - PERDIDA_ODF;
+        panelAbierto = true;
+        if (panelODF != null) panelODF.SetActive(true);
+        RefrescarPanel();
+    }
 
-        if (textoPotenciaEntrada != null)
-            textoPotenciaEntrada.text =
-                "Potencia desde OLT: " + potenciaOLT.ToString("F1") + " dBm";
+    public void CerrarPanel()
+    {
+        panelAbierto = false;
+        if (panelODF != null) panelODF.SetActive(false);
+    }
 
-        if (textoPotenciaSalida != null)
-            textoPotenciaSalida.text =
-                "Potencia tras ODF:  " + potenciaSalida.ToString("F1") + " dBm";
+    // ── Contenido del panel ──
+
+    void RefrescarPanel()
+    {
+        if (textoPanel == null) return;
+
+        float pSalida = potenciaDesdeOLT - PERDIDA_TOTAL_ODF;
+
+        // Evalua si la senal sigue siendo valida tras el ODF
+        string estadoSenal;
+        if (pSalida >= 1f) estadoSenal = "[OK] Senal optima hacia NAP";
+        else if (pSalida >= -1f) estadoSenal = "[!!] Senal ajustada";
+        else estadoSenal = "[--] Senal debil";
+
+        textoPanel.text =
+            "<size=115%><b>ODF — OPTICAL DISTRIB. FRAME</b></size>\n" +
+            "<color=#AAAAAA>──────────────────────────────</color>\n\n" +
+            "<b>¿Que es?</b>\n" +
+            "Componente <color=#FFB347>PASIVO</color> (sin electronica).\n" +
+            "Organiza y protege las fibras\n" +
+            "dentro del rack.\n\n" +
+            "<b>Funcion en la red:</b>\n" +
+            "Interconecta el OLT con el cable\n" +
+            "ADSS exterior que viaja hasta\n" +
+            "la Caja NAP.\n\n" +
+            "<b>CONECTOR: SC/APC</b>\n" +
+            "Verde = APC (pulido en angulo 8°)\n" +
+            "Reduce reflexiones hacia el laser\n" +
+            "del OLT.\n\n" +
+            "<b>PERDIDAS EN ESTE PUNTO:</b>\n" +
+            "Adaptador entrada: <color=#FF8C00>" +
+                PERDIDA_ADAPTADOR.ToString("F2") + " dB</color>\n" +
+            "Adaptador salida:  <color=#FF8C00>" +
+                PERDIDA_ADAPTADOR.ToString("F2") + " dB</color>\n" +
+            "Total ODF:         <color=#FF8C00>" +
+                PERDIDA_TOTAL_ODF.ToString("F2") + " dB</color>\n\n" +
+            "<b>PRESUPUESTO OPTICO:</b>\n" +
+            "Entrada (OLT): <color=#00FF88>" +
+                potenciaDesdeOLT.ToString("F1") + " dBm</color>\n" +
+            "Salida (NAP):  <color=#00FF88>" +
+                pSalida.ToString("F1") + " dBm</color>\n\n" +
+            "<color=#AAAAAA>" + estadoSenal + "</color>\n\n" +
+            "<b>Estandar:</b> <color=#AAAAAA>IEC 61753-1</color>\n\n" +
+            "<color=#555555>[F] Cerrar</color>";
     }
 }

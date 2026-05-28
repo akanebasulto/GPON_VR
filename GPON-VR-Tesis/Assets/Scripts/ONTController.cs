@@ -1,33 +1,30 @@
 ﻿using UnityEngine;
 using TMPro;
 
-// ══════════════════════════════════════════════════════════
-// ONTController.cs — Versión sin física
-// Se asigna a: ONT_1, ONT_2, ONT_3 y ONT_4
+// Va en: ONT_1, ONT_2, ONT_3, ONT_4 (Zona 3)
 //
-// El mismo script para las 4 ONTs.
-// El campo 'numeroCliente' personaliza cada instancia.
-//
-// Interacción: solo F para abrir panel informativo.
-// Las teclas las gestiona ProximityDetector → InteractableZone.
-// Este script NO maneja input directamente.
-// ══════════════════════════════════════════════════════════
+// COMO PERSONALIZAR EL NOMBRE DE CADA CLIENTE:
+// Selecciona ONT_1 en el Hierarchy.
+// En el Inspector, campo "Nombre Cliente":
+//   cambia "Cliente" por el nombre real, ej: "Oficina 1"
+// Repite para ONT_2 → "Recepcion", ONT_3 → "Sala Reuniones", etc.
 
 public class ONTController : MonoBehaviour
 {
-    // ──────────────────────────────────────────────────────
-    // IDENTIFICACIÓN
-    // ──────────────────────────────────────────────────────
-
-    [Header("Identificación del cliente")]
+    [Header("Identificacion del cliente")]
     [Range(1, 4)]
+    [Tooltip("Numero de puerto GPON (1 a 4)")]
     public int numeroCliente = 1;
 
-    // ──────────────────────────────────────────────────────
-    // LEDs — referencias directas, sin usar Tags
-    // ──────────────────────────────────────────────────────
+    [Tooltip("Nombre personalizado. Ejemplos:\n" +
+             "Oficina 1 | Recepcion | Sala Reuniones | Almacen")]
+    public string nombreCliente = "Cliente";
 
-    [Header("LEDs (arrastra cada Sphere desde Hierarchy)")]
+    [Header("Panel educativo")]
+    public GameObject panelONT;
+    public TMP_Text textoPanel;
+
+    [Header("LEDs del panel frontal")]
     public Renderer ledPower;
     public Renderer ledPON;
     public Renderer ledLAN;
@@ -39,58 +36,34 @@ public class ONTController : MonoBehaviour
     public Material matRojo;
     public Material matGris;
 
-    // ──────────────────────────────────────────────────────
-    // PANEL
-    // ──────────────────────────────────────────────────────
-
-    [Header("Panel informativo")]
-    public GameObject panelONT;
-    public TMP_Text textoPanel;
-
-    // ──────────────────────────────────────────────────────
-    // REFERENCIA AL OLT
-    // ──────────────────────────────────────────────────────
-
     [Header("Referencia al OLT")]
     public OLTController controladorOLT;
 
-    // ──────────────────────────────────────────────────────
-    // CONSTANTES
-    // ──────────────────────────────────────────────────────
+    // ── Constantes ──
+    private const float PERDIDA_TOTAL = 12.6f;   // ODF+feeder+splitter+drop
+    private const float SENS_MINIMA = -27.0f;
+    private const float DISTANCIA_CIERRE = 3.0f;
 
-    private const float PERDIDA_TOTAL = 12.6f;   // dB (ODF+feeder+splitter+drop)
-    private const float SENS_MINIMA = -27.0f;  // dBm (sensibilidad mínima ONT)
-    private const float DISTANCIA_CIERRE = 3.0f;  // metros
-
-    // ──────────────────────────────────────────────────────
-    // ESTADO INTERNO
-    // ──────────────────────────────────────────────────────
-
+    // ── Estado interno ──
     private float potenciaOLT = 2.0f;
     private bool panelAbierto = false;
 
-    // Datos del cliente — fijos por ahora
-    private string ssid;
+    // Datos del cliente (fijos en esta version)
     private int velocidadMbps = 100;
     private int clientesWiFi;
-
-    // ──────────────────────────────────────────────────────
-    // INICIO
-    // ──────────────────────────────────────────────────────
+    private string ssid;
 
     void Start()
     {
-        // Datos simulados personalizados por número de cliente
-        ssid = "Red_GPON_" + numeroCliente;
+        // Genera datos simulados distintos por cliente
         clientesWiFi = numeroCliente + 1;
+        ssid = "GPON_" + nombreCliente.Replace(" ", "_");
 
         if (panelONT != null)
             panelONT.SetActive(false);
 
-        // Estado inicial de LEDs
         ActualizarLEDs(potenciaOLT);
 
-        // Suscripción al evento del OLT
         if (controladorOLT != null)
             controladorOLT.OnParameterChanged.AddListener(
                 OnPotenciaOLTCambiada);
@@ -103,31 +76,47 @@ public class ONTController : MonoBehaviour
                 OnPotenciaOLTCambiada);
     }
 
-    // ──────────────────────────────────────────────────────
-    // UPDATE — solo cierre por distancia
-    // ──────────────────────────────────────────────────────
-
     void Update()
     {
-        if (panelAbierto)
-            VerificarDistanciaPanel();
-    }
-
-    void VerificarDistanciaPanel()
-    {
+        if (!panelAbierto) return;
         if (Camera.main == null) return;
 
         float dist = Vector3.Distance(
-            transform.position,
-            Camera.main.transform.position);
-
-        if (dist > DISTANCIA_CIERRE)
-            CerrarPanel();
+            transform.position, Camera.main.transform.position);
+        if (dist > DISTANCIA_CIERRE) CerrarPanel();
     }
 
-    // ──────────────────────────────────────────────────────
-    // PANEL — llamados desde InteractableZone
-    // ──────────────────────────────────────────────────────
+    // ── LEDs ──
+
+    void ActualizarLEDs(float potencia)
+    {
+        float pONT = potencia - PERDIDA_TOTAL;
+        bool haySenal = pONT >= SENS_MINIMA;
+
+        if (ledPower != null) ledPower.material = matVerde;
+
+        if (ledPON != null)
+            ledPON.material = haySenal ? matVerde : matRojo;
+
+        if (ledLAN != null)
+            ledLAN.material = haySenal ? matVerde : matGris;
+
+        if (ledWiFi != null)
+        {
+            if (!haySenal) ledWiFi.material = matGris;
+            else if (clientesWiFi > 0) ledWiFi.material = matVerde;
+            else ledWiFi.material = matNaranja;
+        }
+    }
+
+    void OnPotenciaOLTCambiada(float nuevaPotencia)
+    {
+        potenciaOLT = nuevaPotencia;
+        ActualizarLEDs(potenciaOLT);
+        if (panelAbierto) RefrescarPanel();
+    }
+
+    // ── Métodos de panel ──
 
     public void TogglePanel()
     {
@@ -148,86 +137,49 @@ public class ONTController : MonoBehaviour
         if (panelONT != null) panelONT.SetActive(false);
     }
 
-    // ──────────────────────────────────────────────────────
-    // EVENTO DEL OLT
-    // ──────────────────────────────────────────────────────
-
-    void OnPotenciaOLTCambiada(float nuevaPotencia)
-    {
-        potenciaOLT = nuevaPotencia;
-        ActualizarLEDs(potenciaOLT);
-        if (panelAbierto) RefrescarPanel();
-    }
-
-    // ──────────────────────────────────────────────────────
-    // LEDs
-    // ──────────────────────────────────────────────────────
-
-    void ActualizarLEDs(float potencia)
-    {
-        float potenciaEnONT = potencia - PERDIDA_TOTAL;
-        bool haySenal = potenciaEnONT >= SENS_MINIMA;
-
-        // POWER: siempre verde (el equipo está encendido)
-        if (ledPower != null)
-            ledPower.material = matVerde;
-
-        // PON: verde = sincronizado, rojo = sin señal óptica
-        if (ledPON != null)
-            ledPON.material = haySenal ? matVerde : matRojo;
-
-        // LAN: verde si hay señal (PC conectada)
-        if (ledLAN != null)
-            ledLAN.material = haySenal ? matVerde : matGris;
-
-        // WiFi: verde con clientes, naranja sin clientes, gris sin señal
-        if (ledWiFi != null)
-        {
-            if (!haySenal) ledWiFi.material = matGris;
-            else if (clientesWiFi > 0) ledWiFi.material = matVerde;
-            else ledWiFi.material = matNaranja;
-        }
-    }
-
-    // ──────────────────────────────────────────────────────
-    // CONTENIDO DEL PANEL
-    // ──────────────────────────────────────────────────────
+    // ── Contenido del panel ──
 
     void RefrescarPanel()
     {
         if (textoPanel == null) return;
 
-        float potONT = potenciaOLT - PERDIDA_TOTAL;
-        float margen = potONT - SENS_MINIMA;
-        bool haySenal = potONT >= SENS_MINIMA;
+        float pONT = potenciaOLT - PERDIDA_TOTAL;
+        float margen = pONT - SENS_MINIMA;
+        bool senal = pONT >= SENS_MINIMA;
 
-        string estadoPON = haySenal
-            ? "● SINCRONIZADO con OLT"
-            : "○ SIN SEÑAL ÓPTICA (LOS)";
+        string estadoPON = senal
+            ? "[OK] SINCRONIZADO con OLT"
+            : "[--] SIN SENAL OPTICA (LOS)";
 
         string estadoMargen;
-        if (margen >= 10f) estadoMargen = "✓ EXCELENTE — +" + margen.ToString("F1") + " dB";
-        else if (margen >= 5f) estadoMargen = "✓ BUENO     — +" + margen.ToString("F1") + " dB";
-        else if (margen >= 0f) estadoMargen = "⚠ AJUSTADO  — +" + margen.ToString("F1") + " dB";
-        else estadoMargen = "✗ SIN SEÑAL — " + margen.ToString("F1") + " dB";
+        if (margen >= 10f) estadoMargen = "[OK] Excelente +" + margen.ToString("F1") + " dB";
+        else if (margen >= 5f) estadoMargen = "[OK] Bueno     +" + margen.ToString("F1") + " dB";
+        else if (margen >= 0f) estadoMargen = "[!!] Ajustado  +" + margen.ToString("F1") + " dB";
+        else estadoMargen = "[--] Sin senal  " + margen.ToString("F1") + " dB";
 
         textoPanel.text =
-            "╔═══ ONT — CLIENTE " + numeroCliente + " ══════════════╗\n\n" +
-            "  Puerto GPON:  " + numeroCliente + " / 8\n" +
-            "  ID ONT:       ONU-000" + numeroCliente + "\n\n" +
-            "  SEÑAL ÓPTICA:\n" +
-            "  Potencia:     " + potONT.ToString("F1") + " dBm\n" +
-            "  Mínimo ONT:   " + SENS_MINIMA + " dBm\n" +
-            "  " + estadoMargen + "\n\n" +
-            "  ESTADO PON:   " + estadoPON + "\n\n" +
-            "  RED WiFi:\n" +
-            "  SSID:         " + ssid + "\n" +
-            "  Velocidad:    " + velocidadMbps + " Mbps\n" +
-            "  Clientes:     " + clientesWiFi + " dispositivos\n\n" +
-            "  λ recepción:  1490 nm (downstream)\n" +
-            "  λ emisión:    1310 nm (upstream)\n\n" +
-            "  [F] Cerrar\n" +
-            "╚════════════════════════════════════╝";
+            "<size=115%><b>ONT — " + nombreCliente.ToUpper() + "</b></size>\n" +
+            "<color=#AAAAAA>──────────────────────────────</color>\n\n" +
+            "<b>Puerto GPON:</b>  " + numeroCliente + " / 8\n" +
+            "<b>ID ONT:</b>       ONU-000" + numeroCliente + "\n\n" +
+            "<b>¿Que es?</b>\n" +
+            "Equipo en el lado del cliente.\n" +
+            "Convierte senal optica en Ethernet\n" +
+            "y WiFi para los dispositivos.\n\n" +
+            "<b>MODULO BOSA:</b>\n" +
+            "Recibe: <color=#FFB347>1490 nm</color> (desde OLT)\n" +
+            "Envia:  <color=#87CEEB>1310 nm</color> (hacia OLT)\n\n" +
+            "<b>SENAL OPTICA RECIBIDA:</b>\n" +
+            "Potencia:  <color=#00FF88>" + pONT.ToString("F1") + " dBm</color>\n" +
+            "Minimo:    <color=#AAAAAA>" + SENS_MINIMA + " dBm</color>\n" +
+            "Estado:    <color=#AAAAAA>" + estadoMargen + "</color>\n\n" +
+            "<b>ESTADO PON:</b>\n" +
+            "<color=#AAAAAA>" + estadoPON + "</color>\n\n" +
+            "<b>RED WiFi:</b>\n" +
+            "SSID:      <color=#00FF88>" + ssid + "</color>\n" +
+            "Velocidad: <color=#00FF88>" + velocidadMbps + " Mbps</color>\n" +
+            "Clientes:  <color=#00FF88>" + clientesWiFi + " dispositivos</color>\n\n" +
+            "<b>Estandar:</b> <color=#AAAAAA>ITU-T G.984.5</color>\n\n" +
+            "<color=#555555>[F] Cerrar</color>";
     }
-
-} // ← único cierre de la clase. Nada va después.
+}

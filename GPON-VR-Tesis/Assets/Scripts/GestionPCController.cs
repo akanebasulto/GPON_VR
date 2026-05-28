@@ -2,188 +2,162 @@
 using TMPro;
 using UnityEngine.InputSystem;
 
-// GestionPCController.cs
-// Controla el panel NMS de la PC de gestión.
+// Va en: PC_Gestion (Zona 1)
+// Panel configurable: el usuario cambia potencia y velocidad
+// con las flechas del teclado cuando el panel está abierto.
+
 public class GestionPCController : MonoBehaviour
 {
-    [Header("Panel visual del Canvas")]
-    public GameObject panelNMS;
+    [Header("Panel educativo")]
+    public GameObject panelPC;
+    public TMP_Text textoPanel;
 
-    [Header("Textos del panel (TextMeshPro)")]
-    public TMP_Text textoContenido;
-
-    [Header("Referencia al OLT para enviarle configuraciones")]
+    [Header("Referencia al OLT")]
     public OLTController controladorOLT;
 
-    [Header("Referencia al slider de potencia del OLT")]
-    public UnityEngine.UI.Slider sliderPotenciaOLT;
-
-    [Header("Referencia al slider de velocidad del OLT")]
-    public UnityEngine.UI.Slider sliderVelocidadOLT;
-
-    private bool panelAbierto = false;
-    private bool ignorarFCerrarHastaSoltar = false;
-    private float ultimoCambioPanel = -1f;
-
-    [Header("Antirebote de interacción")]
-    [Tooltip("Tiempo mínimo entre abrir/cerrar para evitar doble disparo de F")]
-    public float cooldownToggle = 0.2f;
-
+    // ── Estado interno ──
     private float potenciaActual = 2.0f;
-    private int indiceVelocidad = 2;
+    private int indiceVelocidad = 2;        // índice 2 = 100 Mbps
+    private bool panelAbierto = false;
 
-    private readonly int[] velocidades = { 10, 50, 100, 300, 600 };
+    private const float DISTANCIA_CIERRE = 5.0f;
+    private int[] velocidades = { 10, 50, 100, 300, 600 };
 
     void Start()
     {
-        if (panelNMS != null)
-            panelNMS.SetActive(false);
-
-        RefrescarTextoPanel();
+        if (panelPC != null)
+            panelPC.SetActive(false);
     }
 
+    // Update gestiona las teclas de configuración
+    // SOLO cuando el panel está abierto.
     void Update()
     {
-        if (!panelAbierto)
-            return;
+        if (!panelAbierto) return;
+        if (Keyboard.current == null) return;
 
-        ProcesarInputPanel();
+        bool cambio = false;
+
+        // Potencia TX (Arriba / Abajo)
+        if (Keyboard.current.upArrowKey.wasPressedThisFrame)
+        {
+            potenciaActual = Mathf.Clamp(potenciaActual + 0.5f, -3f, 5f);
+            cambio = true;
+        }
+        if (Keyboard.current.downArrowKey.wasPressedThisFrame)
+        {
+            potenciaActual = Mathf.Clamp(potenciaActual - 0.5f, -3f, 5f);
+            cambio = true;
+        }
+
+        // Velocidad contratada (Izquierda / Derecha)
+        if (Keyboard.current.rightArrowKey.wasPressedThisFrame)
+        {
+            indiceVelocidad = Mathf.Clamp(
+                indiceVelocidad + 1, 0, velocidades.Length - 1);
+            cambio = true;
+        }
+        if (Keyboard.current.leftArrowKey.wasPressedThisFrame)
+        {
+            indiceVelocidad = Mathf.Clamp(
+                indiceVelocidad - 1, 0, velocidades.Length - 1);
+            cambio = true;
+        }
+
+        if (cambio)
+        {
+            AplicarConfiguracion();
+            RefrescarPanel();
+        }
+
+        // Escape cierra el panel
+        if (Keyboard.current.escapeKey.wasPressedThisFrame)
+            CerrarPanel();
+
+        // Cierre automático por distancia
+        if (Camera.main != null)
+        {
+            float dist = Vector3.Distance(
+                transform.position, Camera.main.transform.position);
+            if (dist > DISTANCIA_CIERRE) CerrarPanel();
+        }
     }
+
+    // Envía los nuevos parámetros al OLT
+    void AplicarConfiguracion()
+    {
+        if (controladorOLT != null)
+            controladorOLT.ActualizarEstado(potenciaActual, indiceVelocidad);
+    }
+
+    // ── Métodos de panel (llamados por InteractableZone) ──
 
     public void TogglePanel()
     {
-        // Para evitar el comportamiento invertido con interactores externos,
-        // este método solo abre si está cerrado (idempotente cuando está abierto).
-        if (panelAbierto)
-            return;
-
-        if (Time.time - ultimoCambioPanel < cooldownToggle)
-            return;
-
-        AbrirPanel();
-    }
-
-    // Método explícito para cerrar desde otros scripts (si se necesita).
-    public void CerrarPanelExterno()
-    {
-        if (!panelAbierto)
-            return;
-
-        CerrarPanel();
+        if (panelAbierto) CerrarPanel();
+        else AbrirPanel();
     }
 
     public void AbrirPanel()
     {
         panelAbierto = true;
-        ultimoCambioPanel = Time.time;
-
-        if (panelNMS != null)
-            panelNMS.SetActive(true);
-
-        // Evita que la misma pulsación de F (usada para abrir)
-        // cierre el panel inmediatamente.
-        ignorarFCerrarHastaSoltar = true;
-        RefrescarTextoPanel();
+        if (panelPC != null) panelPC.SetActive(true);
+        RefrescarPanel();
     }
-
-    void ProcesarInputPanel()
-    {
-        if (Keyboard.current == null) return;
-
-        if (Keyboard.current.upArrowKey.wasPressedThisFrame)
-        {
-            potenciaActual = Mathf.Clamp(potenciaActual + 0.5f, -3f, 5f);
-            AplicarConfiguracion();
-        }
-
-        if (Keyboard.current.downArrowKey.wasPressedThisFrame)
-        {
-            potenciaActual = Mathf.Clamp(potenciaActual - 0.5f, -3f, 5f);
-            AplicarConfiguracion();
-        }
-
-        if (Keyboard.current.rightArrowKey.wasPressedThisFrame)
-        {
-            indiceVelocidad = Mathf.Clamp(indiceVelocidad + 1, 0, velocidades.Length - 1);
-            AplicarConfiguracion();
-        }
-
-        if (Keyboard.current.leftArrowKey.wasPressedThisFrame)
-        {
-            indiceVelocidad = Mathf.Clamp(indiceVelocidad - 1, 0, velocidades.Length - 1);
-            AplicarConfiguracion();
-        }
-
-        // Permite cerrar con F después de soltar la tecla usada al abrir.
-        if (ignorarFCerrarHastaSoltar && !Keyboard.current.fKey.isPressed)
-            ignorarFCerrarHastaSoltar = false;
-
-        if (Keyboard.current.escapeKey.wasPressedThisFrame)
-        {
-            CerrarPanel();
-        }
-    }
-
-    void CerrarPanel()
+    public void CerrarPanel()
     {
         panelAbierto = false;
-        ultimoCambioPanel = Time.time;
-
-        if (panelNMS != null)
-            panelNMS.SetActive(false);
+        if (panelPC != null) panelPC.SetActive(false);
     }
 
-    void AplicarConfiguracion()
+    // ── Contenido del panel ──
+
+    void RefrescarPanel()
     {
-        if (sliderPotenciaOLT != null)
-            sliderPotenciaOLT.value = potenciaActual;
+        if (textoPanel == null) return;
 
-        if (sliderVelocidadOLT != null)
-            sliderVelocidadOLT.value = indiceVelocidad;
+        string estadoRed;
+        int puertos;
 
-        RefrescarTextoPanel();
-    }
-
-    void RefrescarTextoPanel()
-    {
-        if (textoContenido == null) return;
-
-        string estadoRed = EvaluarEstadoRed(potenciaActual);
-
-        string contenido =
-            "=== CONSOLA NMS - RED GPON ===\n" +
-            "\n" +
-            "  CONFIGURACION ACTIVA:\n" +
-            "  - Potencia TX:    " + potenciaActual.ToString("F1") + " dBm\n" +
-            "     (Up/Down para cambiar)\n" +
-            "\n" +
-            "  - Velocidad/puerto: " + velocidades[indiceVelocidad] + " Mbps\n" +
-            "     (Left/Right para cambiar)\n" +
-            "\n" +
-            "  ESTADO DE LA RED:\n" +
-            "  " + estadoRed + "\n" +
-            "\n" +
-            "  TOPOLOGIA:\n" +
-            "  PC -> OLT -> ODF -> Feeder\n" +
-            "              -> NAP -> ONT x4\n" +
-            "\n" +
-            "  Presupuesto optico maximo: 28 dB\n" +
-            "  (Estandar GPON ITU-T G.984)\n" +
-            "\n" +
-            "  [Esc] para cerrar\n" +
-            "==============================";
-
-        textoContenido.text = contenido;
-    }
-
-    string EvaluarEstadoRed(float potencia)
-    {
-        if (potencia >= 1f)
-            return "OPTIMO - Todos los ONTs activos";
-        else if (potencia >= -1f)
-            return "DEGRADADO - ONTs 3 y 4 con alerta";
+        if (potenciaActual >= 0f)
+        {
+            estadoRed = "[OK] Red completamente operativa";
+            puertos = 4;
+        }
+        else if (potenciaActual >= -2f)
+        {
+            estadoRed = "[!!] Clientes 3 y 4 con senal degradada";
+            puertos = 2;
+        }
         else
-            return "CRITICO - ONTs 3 y 4 sin senal";
+        {
+            estadoRed = "[--] Clientes 3 y 4 sin senal";
+            puertos = 0;
+        }
+
+        textoPanel.text =
+            "<size=115%><b>CONSOLA NMS — PC DE GESTION</b></size>\n" +
+            "<color=#AAAAAA>──────────────────────────────</color>\n\n" +
+            "<b>Funcion:</b>\n" +
+            "Estacion desde la que el tecnico\n" +
+            "configura y monitorea la red GPON.\n" +
+            "Conectada al OLT via Ethernet.\n\n" +
+            "<b>CONFIGURACION ACTIVA:</b>\n" +
+            "Potencia TX:  <color=#00FF88>" +
+                potenciaActual.ToString("F1") + " dBm</color>\n" +
+            "  [Flecha Arriba = +0.5 | Abajo = -0.5]\n\n" +
+            "Velocidad DS: <color=#00FF88>" +
+                velocidades[indiceVelocidad] + " Mbps</color>\n" +
+            "  [Flecha Der = subir | Izq = bajar]\n\n" +
+            "<b>TOPOLOGIA:</b>\n" +
+            "PC --> OLT --> ODF --> Feeder\n" +
+            "               --> NAP 1x8\n" +
+            "                   --> ONT x4\n\n" +
+            "<b>ESTADO DE LA RED:</b>\n" +
+            "<color=#AAAAAA>" + estadoRed + "</color>\n" +
+            "Puertos activos: <color=#00FF88>" +
+                puertos + " / 8</color>\n\n" +
+            "<b>Estandar:</b> <color=#AAAAAA>ITU-T G.984 (GPON)</color>\n\n" +
+            "<color=#555555>[Esc] o [F] para cerrar</color>";
     }
 }
-
