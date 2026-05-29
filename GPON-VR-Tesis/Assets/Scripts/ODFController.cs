@@ -1,9 +1,11 @@
 ﻿using UnityEngine;
+using UnityEngine.InputSystem;
 using TMPro;
 
 // Va en: ODF_Chasis (Zona 1 — rack)
 // Panel de solo lectura.
 // Se actualiza automaticamente cuando el OLT cambia potencia.
+// El panel permanece abierto al alejarse; se cierra con F o Escape.
 
 public class ODFController : MonoBehaviour
 {
@@ -17,7 +19,9 @@ public class ODFController : MonoBehaviour
     // ── Constantes tecnicas reales ──
     private const float PERDIDA_ADAPTADOR = 0.30f; // dB por adaptador SC/APC
     private const float PERDIDA_TOTAL_ODF = 0.60f; // entrada + salida
-    private const float DISTANCIA_CIERRE = 4.0f;
+
+    // DISTANCIA_CIERRE eliminada — el panel ya no se cierra
+    // por distancia. Se cierra con F (TogglePanel) o con Escape.
 
     // ── Estado interno ──
     private float potenciaDesdeOLT = 2.0f;
@@ -28,7 +32,6 @@ public class ODFController : MonoBehaviour
         if (panelODF != null)
             panelODF.SetActive(false);
 
-        // Suscripcion al evento del OLT
         if (controladorOLT != null)
             controladorOLT.OnParameterChanged.AddListener(
                 OnPotenciaOLTCambiada);
@@ -43,15 +46,15 @@ public class ODFController : MonoBehaviour
 
     void Update()
     {
-        if (!panelAbierto) return;
-        if (Camera.main == null) return;
-
-        float dist = Vector3.Distance(
-            transform.position, Camera.main.transform.position);
-        if (dist > DISTANCIA_CIERRE) CerrarPanel();
+        // Escape cierra el panel desde cualquier distancia
+        if (panelAbierto
+            && Keyboard.current != null
+            && Keyboard.current.escapeKey.wasPressedThisFrame)
+        {
+            CerrarPanel();
+        }
     }
 
-    // Llamado automaticamente cuando el OLT cambia su potencia
     void OnPotenciaOLTCambiada(float nuevaPotencia)
     {
         potenciaDesdeOLT = nuevaPotencia;
@@ -87,7 +90,6 @@ public class ODFController : MonoBehaviour
 
         float pSalida = potenciaDesdeOLT - PERDIDA_TOTAL_ODF;
 
-        // Evalua si la senal sigue siendo valida tras el ODF
         string estadoSenal;
         if (pSalida >= 1f) estadoSenal = "[OK] Senal optima hacia NAP";
         else if (pSalida >= -1f) estadoSenal = "[!!] Senal ajustada";
@@ -122,6 +124,6 @@ public class ODFController : MonoBehaviour
                 pSalida.ToString("F1") + " dBm</color>\n\n" +
             "<color=#AAAAAA>" + estadoSenal + "</color>\n\n" +
             "<b>Estandar:</b> <color=#AAAAAA>IEC 61753-1</color>\n\n" +
-            "<color=#555555>[F] Cerrar</color>";
+            "<color=#555555>[F] Cerrar   [Esc] Cerrar</color>";
     }
 }

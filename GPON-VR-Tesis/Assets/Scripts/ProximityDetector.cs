@@ -8,7 +8,7 @@ public class ProximityDetector : MonoBehaviour
     [Header("Textos del HUD")]
     public TMP_Text textoPromptF;
     public TMP_Text textoPromptE;
-    public TMP_Text textoSeleccion;   // nuevo — para el alternador Tab
+    public TMP_Text textoSeleccion;
 
     [Header("Contenedor visual del HUD")]
     [Tooltip("El Panel (Image) que agrupa todos los prompts")]
@@ -25,6 +25,35 @@ public class ProximityDetector : MonoBehaviour
     // Índice del componente seleccionado con Tab
     private int indiceSeleccionado = 0;
 
+    // ── OPTIMIZACIÓN: caché de Camera.main ──
+    // Camera.main llama FindGameObjectWithTag internamente cada vez
+    // que se accede. Cacheándola en Start() esa búsqueda ocurre
+    // una sola vez en lugar de 120 veces por segundo.
+    private Camera camaraCache;
+
+    // ── OPTIMIZACIÓN: control de cambios en el HUD ──
+    // ActualizarHUD solo se ejecuta cuando algo cambia,
+    // no en cada frame aunque el estado sea idéntico.
+    private InteractableZone zonaActivaAnterior = null;
+    private int indiceAnterior = -1;
+    private bool hudVisible = false;
+
+    // ── OPTIMIZACIÓN: limpieza de nulos con timer ──
+    // RemoveAll con lambda genera basura para el GC cada frame.
+    // Con un timer se ejecuta solo 2 veces por segundo.
+    private float timerLimpieza = 0f;
+    private const float INTERVALO_LIMPIEZA = 0.5f;
+
+    // ──────────────────────────────────────────────────────
+    // INICIO
+    // ──────────────────────────────────────────────────────
+
+    void Start()
+    {
+        // Cachear Camera.main una sola vez
+        camaraCache = Camera.main;
+    }
+
     // ──────────────────────────────────────────────────────
     // DETECCIÓN DE PROXIMIDAD
     // ──────────────────────────────────────────────────────
@@ -34,7 +63,10 @@ public class ProximityDetector : MonoBehaviour
         InteractableZone zona = other.GetComponent<InteractableZone>();
         if (zona == null) return;
         if (!zonasDisponibles.Contains(zona))
+        {
             zonasDisponibles.Add(zona);
+            ForzarRefrescoHUD(); // nueva zona: forzar redibujado
+        }
     }
 
     void OnTriggerExit(Collider other)
@@ -45,10 +77,10 @@ public class ProximityDetector : MonoBehaviour
         int idx = zonasDisponibles.IndexOf(zona);
         zonasDisponibles.Remove(zona);
 
-        // Ajusta el índice si la zona que salió estaba
-        // antes o en la posición seleccionada
         if (idx <= indiceSeleccionado && indiceSeleccionado > 0)
             indiceSeleccionado--;
+
+        ForzarRefrescoHUD(); // zona salió: forzar redibujado
     }
 
     // ──────────────────────────────────────────────────────
@@ -57,21 +89,27 @@ public class ProximityDetector : MonoBehaviour
 
     void Update()
     {
-        // Limpia referencias nulas por si algún objeto
-        // fue desactivado sin salir del trigger
-        zonasDisponibles.RemoveAll(z => z == null);
+        // Limpieza de nulos: solo cada INTERVALO_LIMPIEZA segundos
+        timerLimpieza += Time.deltaTime;
+        if (timerLimpieza >= INTERVALO_LIMPIEZA)
+        {
+            timerLimpieza = 0f;
+            int antes = zonasDisponibles.Count;
+            zonasDisponibles.RemoveAll(z => z == null);
+            if (zonasDisponibles.Count != antes) ForzarRefrescoHUD();
+        }
 
         if (zonasDisponibles.Count == 0)
         {
-            OcultarTodo();
+            if (hudVisible) OcultarTodo();
             return;
         }
 
-        // Verifica que el jugador está mirando hacia
-        // al menos una de las zonas disponibles
-        if (!HayZonaEnfrente())
+        bool hayZona = HayZonaEnfrente();
+
+        if (!hayZona)
         {
-            OcultarTodo();
+            if (hudVisible) OcultarTodo();
             return;
         }
 
@@ -81,8 +119,18 @@ public class ProximityDetector : MonoBehaviour
 
         ProcesarTeclas();
 
+        // ── Solo actualizar el HUD si algo cambió ──
         InteractableZone zonaActiva = zonasDisponibles[indiceSeleccionado];
-        ActualizarHUD(zonaActiva);
+        bool cambio = (zonaActiva != zonaActivaAnterior)
+                   || (indiceSeleccionado != indiceAnterior)
+                   || !hudVisible;
+
+        if (cambio)
+        {
+            zonaActivaAnterior = zonaActiva;
+            indiceAnterior = indiceSeleccionado;
+            ActualizarHUD(zonaActiva);
+        }
     }
 
     // ──────────────────────────────────────────────────────
@@ -91,19 +139,22 @@ public class ProximityDetector : MonoBehaviour
 
     bool HayZonaEnfrente()
     {
-        if (Camera.main == null) return false;
+        // Usa camaraCache en lugar de Camera.main
+        if (camaraCache == null)
+        {
+            camaraCache = Camera.main; // recupera si fue nula
+            if (camaraCache == null) return false;
+        }
+
+        Vector3 forward = camaraCache.transform.forward;
+        Vector3 camPos = camaraCache.transform.position;
 
         foreach (InteractableZone zona in zonasDisponibles)
         {
             if (zona == null) continue;
 
-            Vector3 dir = (zona.transform.position
-                - Camera.main.transform.position).normalized;
-
-            float dot = Vector3.Dot(
-                Camera.main.transform.forward, dir);
-
-            if (dot > umbralDireccion) return true;
+            Vector3 dir = (zona.transform.position - camPos).normalized;
+            if (Vector3.Dot(forward, dir) > umbralDireccion) return true;
         }
         return false;
     }
@@ -122,6 +173,7 @@ public class ProximityDetector : MonoBehaviour
         {
             indiceSeleccionado =
                 (indiceSeleccionado + 1) % zonasDisponibles.Count;
+            ForzarRefrescoHUD();
         }
 
         InteractableZone zonaActiva = zonasDisponibles[indiceSeleccionado];
@@ -143,6 +195,8 @@ public class ProximityDetector : MonoBehaviour
     {
         if (contenedorPrompts != null)
             contenedorPrompts.SetActive(true);
+
+        hudVisible = true;
 
         // ── Prompt F ──
         if (textoPromptF != null)
@@ -167,20 +221,21 @@ public class ProximityDetector : MonoBehaviour
         {
             if (zonasDisponibles.Count > 1)
             {
-                string contenido = "<size=85%><color=#AAAAAA>[Tab] Alternar:</color></size>\n";
+                string contenido =
+                    "<size=85%><color=#AAAAAA>[Tab] Alternar:</color></size>\n";
 
                 for (int i = 0; i < zonasDisponibles.Count; i++)
                 {
                     if (zonasDisponibles[i] == null) continue;
 
                     if (i == indiceSeleccionado)
-                        // Seleccionado: texto blanco con flecha
-                        contenido += "<color=#FFFFFF>->  " + zonasDisponibles[i].nombreLegible + "</color>";
+                        contenido += "<color=#FFFFFF>->  "
+                            + zonasDisponibles[i].nombreLegible
+                            + "</color>";
                     else
-                        // No seleccionado: texto gris sin flecha
-                        contenido += "<color=#888888>    " +
-                            zonasDisponibles[i].nombreLegible +
-                            "</color>";
+                        contenido += "<color=#888888>    "
+                            + zonasDisponibles[i].nombreLegible
+                            + "</color>";
 
                     if (i < zonasDisponibles.Count - 1)
                         contenido += "\n";
@@ -198,8 +253,20 @@ public class ProximityDetector : MonoBehaviour
 
     void OcultarTodo()
     {
+        hudVisible = false;
+        zonaActivaAnterior = null;
+        indiceAnterior = -1;
+
         if (contenedorPrompts != null)
             contenedorPrompts.SetActive(false);
+    }
+
+    // Fuerza que el próximo frame redibuje el HUD aunque
+    // la zona activa sea la misma (p.ej. al entrar/salir una zona)
+    void ForzarRefrescoHUD()
+    {
+        zonaActivaAnterior = null;
+        indiceAnterior = -1;
     }
 
     public void RefrescarPromptE()

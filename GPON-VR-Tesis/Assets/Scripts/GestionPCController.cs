@@ -5,6 +5,7 @@ using UnityEngine.InputSystem;
 // Va en: PC_Gestion (Zona 1)
 // Panel configurable: el usuario cambia potencia y velocidad
 // con las flechas del teclado cuando el panel está abierto.
+// El panel permanece abierto al alejarse; se cierra con F o Escape.
 
 public class GestionPCController : MonoBehaviour
 {
@@ -20,7 +21,9 @@ public class GestionPCController : MonoBehaviour
     private int indiceVelocidad = 2;        // índice 2 = 100 Mbps
     private bool panelAbierto = false;
 
-    private const float DISTANCIA_CIERRE = 5.0f;
+    // DISTANCIA_CIERRE eliminada — el panel ya no se cierra
+    // por distancia. Se cierra con F (TogglePanel) o con Escape.
+
     private int[] velocidades = { 10, 50, 100, 300, 600 };
 
     void Start()
@@ -29,8 +32,6 @@ public class GestionPCController : MonoBehaviour
             panelPC.SetActive(false);
     }
 
-    // Update gestiona las teclas de configuración
-    // SOLO cuando el panel está abierto.
     void Update()
     {
         if (!panelAbierto) return;
@@ -70,20 +71,11 @@ public class GestionPCController : MonoBehaviour
             RefrescarPanel();
         }
 
-        // Escape cierra el panel
+        // Escape cierra el panel desde cualquier distancia
         if (Keyboard.current.escapeKey.wasPressedThisFrame)
             CerrarPanel();
-
-        // Cierre automático por distancia
-        if (Camera.main != null)
-        {
-            float dist = Vector3.Distance(
-                transform.position, Camera.main.transform.position);
-            if (dist > DISTANCIA_CIERRE) CerrarPanel();
-        }
     }
 
-    // Envía los nuevos parámetros al OLT
     void AplicarConfiguracion()
     {
         if (controladorOLT != null)
@@ -104,6 +96,7 @@ public class GestionPCController : MonoBehaviour
         if (panelPC != null) panelPC.SetActive(true);
         RefrescarPanel();
     }
+
     public void CerrarPanel()
     {
         panelAbierto = false;
@@ -158,6 +151,6 @@ public class GestionPCController : MonoBehaviour
             "Puertos activos: <color=#00FF88>" +
                 puertos + " / 8</color>\n\n" +
             "<b>Estandar:</b> <color=#AAAAAA>ITU-T G.984 (GPON)</color>\n\n" +
-            "<color=#555555>[Esc] o [F] para cerrar</color>";
+            "<color=#555555>[F] Cerrar   [Esc] Cerrar</color>";
     }
 }

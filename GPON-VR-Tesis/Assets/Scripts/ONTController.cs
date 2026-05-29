@@ -1,7 +1,9 @@
 ﻿using UnityEngine;
+using UnityEngine.InputSystem;
 using TMPro;
 
 // Va en: ONT_1, ONT_2, ONT_3, ONT_4 (Zona 3)
+// El panel permanece abierto al alejarse; se cierra con F o Escape.
 //
 // COMO PERSONALIZAR EL NOMBRE DE CADA CLIENTE:
 // Selecciona ONT_1 en el Hierarchy.
@@ -42,20 +44,20 @@ public class ONTController : MonoBehaviour
     // ── Constantes ──
     private const float PERDIDA_TOTAL = 12.6f;   // ODF+feeder+splitter+drop
     private const float SENS_MINIMA = -27.0f;
-    private const float DISTANCIA_CIERRE = 3.0f;
+
+    // DISTANCIA_CIERRE eliminada — el panel ya no se cierra
+    // por distancia. Se cierra con F (TogglePanel) o con Escape.
 
     // ── Estado interno ──
     private float potenciaOLT = 2.0f;
     private bool panelAbierto = false;
 
-    // Datos del cliente (fijos en esta version)
     private int velocidadMbps = 100;
     private int clientesWiFi;
     private string ssid;
 
     void Start()
     {
-        // Genera datos simulados distintos por cliente
         clientesWiFi = numeroCliente + 1;
         ssid = "GPON_" + nombreCliente.Replace(" ", "_");
 
@@ -78,12 +80,13 @@ public class ONTController : MonoBehaviour
 
     void Update()
     {
-        if (!panelAbierto) return;
-        if (Camera.main == null) return;
-
-        float dist = Vector3.Distance(
-            transform.position, Camera.main.transform.position);
-        if (dist > DISTANCIA_CIERRE) CerrarPanel();
+        // Escape cierra el panel desde cualquier distancia
+        if (panelAbierto
+            && Keyboard.current != null
+            && Keyboard.current.escapeKey.wasPressedThisFrame)
+        {
+            CerrarPanel();
+        }
     }
 
     // ── LEDs ──
@@ -180,6 +183,6 @@ public class ONTController : MonoBehaviour
             "Velocidad: <color=#00FF88>" + velocidadMbps + " Mbps</color>\n" +
             "Clientes:  <color=#00FF88>" + clientesWiFi + " dispositivos</color>\n\n" +
             "<b>Estandar:</b> <color=#AAAAAA>ITU-T G.984.5</color>\n\n" +
-            "<color=#555555>[F] Cerrar</color>";
+            "<color=#555555>[F] Cerrar   [Esc] Cerrar</color>";
     }
 }
